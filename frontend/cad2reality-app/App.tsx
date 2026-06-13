@@ -1,20 +1,64 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import HomeScreen from './src/screens/HomeScreen';
+import PipelineScreen from './src/screens/PipelineScreen';
+import ARViewerScreen from './src/screens/ARViewerScreen';
 
-export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
+type Screen = 'home' | 'pipeline' | 'ar';
+
+interface PipelineData {
+  fileName: string;
+  pipelineResult: any;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  const [pipelineData, setPipelineData] = useState<PipelineData | null>(null);
+  const [arUrl, setArUrl] = useState<string>('');
+
+  const handleFileSelected = (data: PipelineData) => {
+    setPipelineData(data);
+    setCurrentScreen('pipeline');
+  };
+
+  const handleViewAR = (url: string) => {
+    setArUrl(url);
+    setCurrentScreen('ar');
+  };
+
+  const handleBackToHome = () => {
+    setCurrentScreen('home');
+    setPipelineData(null);
+  };
+
+  const handleBackToPipeline = () => {
+    setCurrentScreen('pipeline');
+  };
+
+  switch (currentScreen) {
+    case 'home':
+      return <HomeScreen onFileSelected={handleFileSelected} />;
+
+    case 'pipeline':
+      return pipelineData ? (
+        <PipelineScreen
+          fileName={pipelineData.fileName}
+          pipelineResult={pipelineData.pipelineResult}
+          onViewAR={handleViewAR}
+          onBack={handleBackToHome}
+        />
+      ) : (
+        <HomeScreen onFileSelected={handleFileSelected} />
+      );
+
+    case 'ar':
+      return (
+        <ARViewerScreen
+          arUrl={arUrl}
+          onBack={handleBackToPipeline}
+        />
+      );
+
+    default:
+      return <HomeScreen onFileSelected={handleFileSelected} />;
+  }
+}

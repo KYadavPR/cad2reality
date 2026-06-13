@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Three.js AR Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #121212;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+        .ui-overlay {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 10;
+        }
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        .dimension-label {
+            color: #00ffcc;
+            font-family: monospace;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #00ffcc;
+            border-radius: 4px;
+            pointer-events: none;
+            margin-top: -15px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<div class="ui-overlay">
+    <button id="btn-assemble">Assemble</button>
+</div>
+
+<!-- Three.js and GSAP Dependencies via Import Maps -->
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+    import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+    let camera, scene, renderer, labelRenderer, controls;
+    let modelGroup = new THREE.Group();
+    let parts = []; // Store original parts for animation
+    let modelLoaded = false; // Track if model is loaded
+    let modelPlaced = false; // Track if model is placed in AR
+    
+    // WebXR Hit Testing variables
+    let reticle;
+    let hitTestSource = null;
+    let hitTestSourceRequested = false;
+
+    const modelUrl = "{{ model_url|safe }}";
+    const modelWidth = parseFloat("{{ model_width|default:'0' }}");
+    const modelHeight = parseFloat("{{ model_height|default:'0' }}");
+
+    init();
+    animate();
+
+    function init() {
+        const container = document.getElementById('container');
+
+        // Scene
+        scene = new THREE.Scene();
+        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+        dirLight.position.set(5, 10, 7.5);
+        scene.add(dirLight);
+
+        // Camera
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.5, 4);
+
+        // WebGL Renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true; // Enable WebXR
+        container.appendChild(renderer.domElement);
+
+        // CSS2D Renderer (For Labels)
+        labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        // Controls
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1, 0);
+        controls.update();
+
+        // Add AR Button
+        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+        arButton.style.position = 'absolute';
+        arButton.style.bottom = '80px'; // Move it above our UI
+        document.body.appendChild(arButton);
+
+        // WebXR Hit Testing Reticle
+        const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+        const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
+        reticle.matrixAutoUpdate = false;
+        reticle.visible = false;
+        scene.add(reticle);
+
+        const controller = renderer.xr.getController(0);
+        controller.addEventListener('select', onSelect);
+        scene.add(controller);
+
+        renderer.xr.addEventListener('sessionstart', () => {
+            // When AR starts, hide the model until placed via tap or auto-place
+            modelGroup.visible = false;
+            modelPlaced = false;
+            controls.enabled = false; // Disable orbit controls in AR
+            
+            // Auto-place in front of camera after a short delay
+            // (gives hit-test time to initialize; fallback if no floor detected)
+            setTimeout(() => {
+                if (!modelPlaced && modelLoaded) {
+                    modelGroup.position.set(0, 0, -1.5); // 1.5m in front of camera, on ground
+                    modelGroup.visible = true;
+                    modelPlaced = true;
+                }
+            }, 2000);
+        });
+
+        renderer.xr.addEventListener('sessionend', () => {
+            controls.enabled = true; // Re-enable orbit controls
+            modelGroup.visible = true;
+            modelPlaced = false;
+            // Reset position for 3D preview
+            modelGroup.position.set(0, 0, 0);
+        });
+
+        // Add Custom AR Button to launch native ARCore Scene Viewer
+        const nativeArBtn = document.createElement('button');
+        nativeArBtn.id = 'btn-native-ar';
+        nativeArBtn.textContent = '📷 Launch ARCore Camera';
+        nativeArBtn.style.background = '#4CAF50'; // Green to stand out
+        document.querySelector('.ui-overlay').appendChild(nativeArBtn);
+
+        // Load Model
+        scene.add(modelGroup);
+        const loader = new GLTFLoader();
+        
+        loader.load(modelUrl, function (gltf) {
+            const loadedModel = gltf.scene;
+            
+            // Standardize scale — normalize to ~0.5m for AR
+            loadedModel.scale.set(1, 1, 1);
+            
+            // Center model at ground level (y=0)
+            const box = new THREE.Box3().setFromObject(loadedModel);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            
+            // In preview mode, float at y=1; in AR the group position handles placement
+            loadedModel.position.x = -center.x;
+            loadedModel.position.y = -box.min.y; // Sit on ground (bottom at y=0)
+            loadedModel.position.z = -center.z;
+            
+            // Scale model so largest dimension is ~0.5m (good for AR)
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if (maxDim > 0) {
+                const targetSize = 0.5;
+                const scaleFactor = targetSize / maxDim;
+                loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                
+                // Recalculate after scaling
+                const newBox = new THREE.Box3().setFromObject(loadedModel);
+                loadedModel.position.y = -newBox.min.y; // Re-align to ground
+            }
+            
+            // Add custom material and store parts for animation
+            loadedModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: 0x888888,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    });
+                    
+                    // Store original position for GSAP
+                    child.userData.originalPosition = child.position.clone();
+                    parts.push(child);
+                }
+            });
+
+            modelGroup.add(loadedModel);
+            modelLoaded = true;
+
+            // Add Dimension Labels (Phase 4)
+            if (modelWidth > 0 && modelHeight > 0) {
+                // Width Label
+                const widthDiv = document.createElement('div');
+                widthDiv.className = 'dimension-label';
+                widthDiv.textContent = `W: ${modelWidth} mm`;
+                const widthLabel = new CSS2DObject(widthDiv);
+                widthLabel.position.set(0, box.max.y + 0.2, 0);
+                loadedModel.add(widthLabel);
+
+                // Height Label
+                const heightDiv = document.createElement('div');
+                heightDiv.className = 'dimension-label';
+                heightDiv.textContent = `H: ${modelHeight} mm`;
+                const heightLabel = new CSS2DObject(heightDiv);
+                heightLabel.position.set(box.max.x + 0.2, center.y, 0);
+                loadedModel.add(heightLabel);
+            }
+
+            // Scatter parts initially
+            scatterParts();
+
+        }, undefined, function (error) {
+            console.error('Error loading GLTF:', error);
+        });
+
+        // Event Listeners
+        window.addEventListener('resize', onWindowResize);
+        document.getElementById('btn-assemble').addEventListener('click', playAssemblyAnimation);
+        
+        // Native ARCore Trigger — send message to React Native to launch Scene Viewer
+        document.getElementById('btn-native-ar').addEventListener('click', () => {
+            console.log("Launch ARCore Camera clicked, modelUrl:", modelUrl);
+            
+            // Check if we are inside a React Native WebView
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                // Send the model URL to React Native so it can open Scene Viewer natively
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'launch_ar',
+                    modelUrl: modelUrl
+                }));
+                console.log("postMessage sent to React Native");
+            } else {
+                // Fallback: we're in a regular browser — construct Scene Viewer URL directly
+                const sceneViewerUrl = `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(modelUrl)}&mode=ar_preferred`;
+                console.log("Opening Scene Viewer directly:", sceneViewerUrl);
+                window.location.href = sceneViewerUrl;
+            }
+        });
+    }
+
+    function onSelect() {
+        if (reticle.visible) {
+            // Anchor model to the tapped floor position
+            modelGroup.position.setFromMatrixPosition(reticle.matrix);
+            modelGroup.visible = true;
+            modelPlaced = true;
+            reticle.visible = false;
+        } else if (!modelPlaced && modelLoaded) {
+            // If no reticle (no floor detected), place 1.5m in front of camera
+            modelGroup.position.set(0, 0, -1.5);
+            modelGroup.visible = true;
+            modelPlaced = true;
+        }
+    }
+
+    // Phase 5: Assembly Animation Logic
+    function scatterParts() {
+        parts.forEach((part, index) => {
+            // Move parts high up in the air initially
+            part.position.y += 3;
+            // Optionally add some random rotation
+            part.rotation.z += Math.PI * 0.5;
+        });
+    }
+
+    function playAssemblyAnimation() {
+        const btn = document.getElementById('btn-assemble');
+        btn.disabled = true;
+        btn.textContent = "Assembling...";
+
+        // Use GSAP to animate parts to their original position
+        gsap.to(parts.map(p => p.position), {
+            y: (i) => parts[i].userData.originalPosition.y,
+            duration: 1.5,
+            ease: "bounce.out",
+            stagger: 0.1,
+        });
+
+        gsap.to(parts.map(p => p.rotation), {
+            z: 0,
+            duration: 1.5,
+            ease: "power2.out",
+            stagger: 0.1,
+            onComplete: () => {
+                btn.textContent = "Assemble Again";
+                btn.disabled = false;
+                // Prepare for next click by scattering again behind the scenes?
+                // Actually, let's just make it a one-way toggle or reset on click
+                btn.onclick = () => {
+                    scatterParts();
+                    setTimeout(playAssemblyAnimation, 50);
+                };
+            }
+        });
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+        renderer.setAnimationLoop(render);
+    }
+
+    function render(timestamp, frame) {
+        if (frame) {
+            const session = renderer.xr.getSession();
+            const referenceSpace = renderer.xr.getReferenceSpace();
+
+            if (hitTestSourceRequested === false) {
+                session.requestReferenceSpace('viewer').then((refSpace) => {
+                    session.requestHitTestSource({ space: refSpace }).then((source) => {
+                        hitTestSource = source;
+                    });
+                });
+                session.addEventListener('end', () => {
+                    hitTestSourceRequested = false;
+                    hitTestSource = null;
+                });
+                hitTestSourceRequested = true;
+            }
+
+            if (hitTestSource && !modelPlaced) {
+                const hitTestResults = frame.getHitTestResults(hitTestSource);
+                if (hitTestResults.length > 0) {
+                    const hit = hitTestResults[0];
+                    reticle.visible = true;
+                    reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                } else {
+                    reticle.visible = false;
+                }
+            }
+        }
+
+        // Slow rotation for preview mode (not AR)
+        if (!renderer.xr.isPresenting) {
+            modelGroup.rotation.y += 0.005;
+        }
+        if (controls.enabled) controls.update();
+        renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
+    }
+
+</script>
+
+</body>
+</html>

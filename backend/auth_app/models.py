@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 
 class OTPVerification(models.Model):
     user = models.OneToOneField(
-        user,
+        User,
         on_delete=models.CASCADE
     )
 

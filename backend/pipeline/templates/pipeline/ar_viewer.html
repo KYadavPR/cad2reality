@@ -3,55 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Three.js AR Viewer</title>
+    <title>Three.js WebXR Precision Anchors</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background-color: #121212;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
         }
         #container {
             width: 100vw;
             height: 100vh;
         }
-        .ui-overlay {
+        /* Floating UI Panel */
+        #ui-panel {
             position: absolute;
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 15px;
-            z-index: 10;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            z-index: 100;
+            width: 90%;
+            max-width: 400px;
+            display: none; /* Hidden until AR/3D loads */
         }
         button {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             color: white;
-            padding: 12px 24px;
-            border-radius: 30px;
-            font-size: 16px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
         button:hover {
             background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+        }
+        button.active {
+            background: rgba(0, 255, 204, 0.4);
+            border-color: #00ffcc;
+        }
+        #btn-native-ar {
+            background: rgba(0, 180, 80, 0.7);
+            border-color: rgba(0, 255, 100, 0.8);
+            width: 100%;
+            margin-top: 5px;
+        }
+        #btn-reset {
+            display: none;
+        }
+        #https-hint {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 160, 0, 0.85);
+            color: #121212;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 200;
+            text-align: center;
+            display: none;
+        }
+        #sensor-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 255, 204, 0.3);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #00ffcc;
+            z-index: 150;
+            pointer-events: none;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 180px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .sensor-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .sensor-label {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .sensor-val {
+            font-weight: bold;
         }
         .dimension-label {
             color: #00ffcc;
             font-family: monospace;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
-            padding: 4px 8px;
-            background: rgba(0, 0, 0, 0.7);
+            padding: 3px 7px;
+            background: rgba(0,0,0,0.7);
             border: 1px solid #00ffcc;
             border-radius: 4px;
             pointer-events: none;
-            margin-top: -15px;
         }
     </style>
 </head>
@@ -59,11 +122,30 @@
 
 <div id="container"></div>
 
-<div class="ui-overlay">
-    <button id="btn-assemble">Assemble</button>
+<!-- HTTPS Hint -->
+<div id="https-hint">⚠️ WebXR camera needs HTTPS. Use the ARCore button below instead!</div>
+
+<!-- Precision Status Overlay -->
+<div id="sensor-panel">
+    <div class="sensor-row"><span class="sensor-label">Tracking:</span> <span id="val-tracking" class="sensor-val">WebXR SLAM</span></div>
+    <div class="sensor-row"><span class="sensor-label">Tilt (P/R):</span> <span id="val-tilt" class="sensor-val">0.0° / 0.0°</span></div>
+    <div class="sensor-row"><span class="sensor-label">Yaw (Heading):</span> <span id="val-yaw" class="sensor-val">0.0°</span></div>
+    <div class="sensor-row"><span class="sensor-label">GPS Coord:</span> <span id="val-gps" class="sensor-val">Acquiring...</span></div>
+    <div class="sensor-row"><span class="sensor-label">IMU Accel:</span> <span id="val-acc" class="sensor-val">0.00 m/s²</span></div>
+    <div class="sensor-row"><span class="sensor-label">IMU Velocity:</span> <span id="val-vel" class="sensor-val">0.00 m/s</span></div>
+    <div class="sensor-row"><span class="sensor-label">Anchor State:</span> <span id="val-anchor" class="sensor-val">Scanning...</span></div>
 </div>
 
-<!-- Three.js and GSAP Dependencies via Import Maps -->
+<!-- Floating UI -->
+<div id="ui-panel">
+    <button id="btn-solid" class="active">🔵 Solid</button>
+    <button id="btn-wireframe">⬡ Wireframe</button>
+    <button id="btn-xray">💠 X-Ray</button>
+    <button id="btn-native-ar">📷 Launch ARCore Camera</button>
+    <button id="btn-reset">🔄 Reset Placement</button>
+</div>
+
+<!-- Three.js Dependencies -->
 <script type="importmap">
   {
     "imports": {
@@ -72,7 +154,6 @@
     }
   }
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
 <script type="module">
     import * as THREE from 'three';
@@ -82,15 +163,22 @@
     import { ARButton } from 'three/addons/webxr/ARButton.js';
 
     let camera, scene, renderer, labelRenderer, controls;
-    let modelGroup = new THREE.Group();
-    let parts = []; // Store original parts for animation
-    let modelLoaded = false; // Track if model is loaded
-    let modelPlaced = false; // Track if model is placed in AR
     
-    // WebXR Hit Testing variables
+    // Model State
+    let modelGroup = new THREE.Group();
+    let originalMaterials = new Map();
+    let modelLoaded = false;
+    
+    // AR & Anchor State
     let reticle;
     let hitTestSource = null;
     let hitTestSourceRequested = false;
+    let modelPlaced = false;
+    let userTapped = false;
+    let xrAnchor = null;
+    let modelInitialYaw = 0;
+    let anchorInitialYaw = 0;
+    let hasAnchorInitialYaw = false;
 
     const modelUrl = "{{ model_url|safe }}";
     const modelWidth = parseFloat("{{ model_width|default:'0' }}");
@@ -102,7 +190,7 @@
     function init() {
         const container = document.getElementById('container');
 
-        // Scene
+        // 1. Setup Scene
         scene = new THREE.Scene();
         scene.add(new THREE.AmbientLight(0xffffff, 1.5));
         
@@ -110,18 +198,19 @@
         dirLight.position.set(5, 10, 7.5);
         scene.add(dirLight);
 
-        // Camera
+        // 2. Setup Camera
         camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
         camera.position.set(0, 1.5, 4);
 
-        // WebGL Renderer
+        // 3. Setup Renderer with WebXR + live camera passthrough
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true; // Enable WebXR
+        renderer.xr.enabled = true;
+        renderer.setClearColor(0x000000, 0); // Transparent = camera passthrough in AR
         container.appendChild(renderer.domElement);
 
-        // CSS2D Renderer (For Labels)
+        // CSS2D Renderer for dimension labels
         labelRenderer = new CSS2DRenderer();
         labelRenderer.setSize(window.innerWidth, window.innerHeight);
         labelRenderer.domElement.style.position = 'absolute';
@@ -129,18 +218,26 @@
         labelRenderer.domElement.style.pointerEvents = 'none';
         container.appendChild(labelRenderer.domElement);
 
-        // Controls
+        // 4. OrbitControls (for 3D preview mode)
         controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 1, 0);
         controls.update();
 
-        // Add AR Button
-        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+        // 5. AR Button (requires hit-test, optional anchors)
+        const arButton = ARButton.createButton(renderer, { 
+            requiredFeatures: ['hit-test'],
+            optionalFeatures: ['anchors']
+        });
         arButton.style.position = 'absolute';
-        arButton.style.bottom = '80px'; // Move it above our UI
+        arButton.style.bottom = '180px'; // Above our floating UI
         document.body.appendChild(arButton);
 
-        // WebXR Hit Testing Reticle
+        // Detect if page is on HTTP (no HTTPS) and show hint
+        if (window.location.protocol === 'http:') {
+            document.getElementById('https-hint').style.display = 'block';
+        }
+
+        // 6. Reticle (Hit-test indicator)
         const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
         const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
         reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
@@ -148,199 +245,262 @@
         reticle.visible = false;
         scene.add(reticle);
 
+        // 7. Controller / Tap Event
         const controller = renderer.xr.getController(0);
         controller.addEventListener('select', onSelect);
         scene.add(controller);
 
+        // WebXR Session Events
         renderer.xr.addEventListener('sessionstart', () => {
-            // When AR starts, hide the model until placed via tap or auto-place
+            document.getElementById('ui-panel').style.display = 'flex';
+            document.getElementById('sensor-panel').style.display = 'flex';
+            document.getElementById('https-hint').style.display = 'none'; // Hide hint in AR
+            document.getElementById('btn-reset').style.display = 'none';
+            controls.enabled = false;
             modelGroup.visible = false;
             modelPlaced = false;
-            controls.enabled = false; // Disable orbit controls in AR
-            
-            // Auto-place in front of camera after a short delay
-            // (gives hit-test time to initialize; fallback if no floor detected)
-            setTimeout(() => {
-                if (!modelPlaced && modelLoaded) {
-                    modelGroup.position.set(0, 0, -1.5); // 1.5m in front of camera, on ground
-                    modelGroup.visible = true;
-                    modelPlaced = true;
-                }
-            }, 2000);
+            xrAnchor = null;
+            modelInitialYaw = 0;
+            anchorInitialYaw = 0;
+            hasAnchorInitialYaw = false;
         });
 
         renderer.xr.addEventListener('sessionend', () => {
-            controls.enabled = true; // Re-enable orbit controls
+            controls.enabled = true;
             modelGroup.visible = true;
             modelPlaced = false;
-            // Reset position for 3D preview
+            xrAnchor = null;
             modelGroup.position.set(0, 0, 0);
+            modelGroup.quaternion.identity();
+            document.getElementById('btn-reset').style.display = 'none';
+            document.getElementById('sensor-panel').style.display = 'none';
+            if (window.location.protocol === 'http:') {
+                document.getElementById('https-hint').style.display = 'block';
+            }
         });
 
-        // Add Custom AR Button to launch native ARCore Scene Viewer
-        const nativeArBtn = document.createElement('button');
-        nativeArBtn.id = 'btn-native-ar';
-        nativeArBtn.textContent = '📷 Launch ARCore Camera';
-        nativeArBtn.style.background = '#4CAF50'; // Green to stand out
-        document.querySelector('.ui-overlay').appendChild(nativeArBtn);
-
-        // Load Model
+        // 8. Load Model
         scene.add(modelGroup);
         const loader = new GLTFLoader();
         
-        loader.load(modelUrl, function (gltf) {
+        loader.load(modelUrl, (gltf) => {
             const loadedModel = gltf.scene;
             
-            // Standardize scale — normalize to ~0.5m for AR
-            loadedModel.scale.set(1, 1, 1);
-            
-            // Center model at ground level (y=0)
+            // Normalize scale for AR (~0.5m)
             const box = new THREE.Box3().setFromObject(loadedModel);
-            const center = box.getCenter(new THREE.Vector3());
             const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
             
-            // In preview mode, float at y=1; in AR the group position handles placement
-            loadedModel.position.x = -center.x;
-            loadedModel.position.y = -box.min.y; // Sit on ground (bottom at y=0)
-            loadedModel.position.z = -center.z;
-            
-            // Scale model so largest dimension is ~0.5m (good for AR)
             const maxDim = Math.max(size.x, size.y, size.z);
             if (maxDim > 0) {
                 const targetSize = 0.5;
                 const scaleFactor = targetSize / maxDim;
                 loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
-                
-                // Recalculate after scaling
-                const newBox = new THREE.Box3().setFromObject(loadedModel);
-                loadedModel.position.y = -newBox.min.y; // Re-align to ground
             }
             
-            // Add custom material and store parts for animation
+            // Center model and align bottom to ground (y=0)
+            const newBox = new THREE.Box3().setFromObject(loadedModel);
+            loadedModel.position.x = -center.x * loadedModel.scale.x;
+            loadedModel.position.y = -newBox.min.y;
+            loadedModel.position.z = -center.z * loadedModel.scale.z;
+
+            // Cache original materials for Solid mode
             loadedModel.traverse((child) => {
                 if (child.isMesh) {
-                    child.material = new THREE.MeshStandardMaterial({
-                        color: 0x888888,
-                        metalness: 0.8,
-                        roughness: 0.2
-                    });
-                    
-                    // Store original position for GSAP
-                    child.userData.originalPosition = child.position.clone();
-                    parts.push(child);
+                    // Ensure a standard material if none exists or if it's basic
+                    if (!child.material || child.material.type !== 'MeshStandardMaterial') {
+                         child.material = new THREE.MeshStandardMaterial({
+                             color: child.material ? child.material.color : 0x888888,
+                             metalness: 0.5,
+                             roughness: 0.5
+                         });
+                    }
+                    originalMaterials.set(child.uuid, child.material.clone());
                 }
             });
 
             modelGroup.add(loadedModel);
             modelLoaded = true;
+            document.getElementById('ui-panel').style.display = 'flex';
 
-            // Add Dimension Labels (Phase 4)
+            // Dimension Labels
             if (modelWidth > 0 && modelHeight > 0) {
-                // Width Label
+                const newBox2 = new THREE.Box3().setFromObject(loadedModel);
                 const widthDiv = document.createElement('div');
                 widthDiv.className = 'dimension-label';
                 widthDiv.textContent = `W: ${modelWidth} mm`;
                 const widthLabel = new CSS2DObject(widthDiv);
-                widthLabel.position.set(0, box.max.y + 0.2, 0);
+                widthLabel.position.set(0, newBox2.max.y + 0.1, 0);
                 loadedModel.add(widthLabel);
 
-                // Height Label
                 const heightDiv = document.createElement('div');
                 heightDiv.className = 'dimension-label';
                 heightDiv.textContent = `H: ${modelHeight} mm`;
                 const heightLabel = new CSS2DObject(heightDiv);
-                heightLabel.position.set(box.max.x + 0.2, center.y, 0);
+                heightLabel.position.set(newBox2.max.x + 0.1, 0, 0);
                 loadedModel.add(heightLabel);
             }
 
-            // Scatter parts initially
-            scatterParts();
-
-        }, undefined, function (error) {
-            console.error('Error loading GLTF:', error);
+        }, undefined, (error) => {
+            console.error('Error loading model:', error);
         });
 
-        // Event Listeners
         window.addEventListener('resize', onWindowResize);
-        document.getElementById('btn-assemble').addEventListener('click', playAssemblyAnimation);
-        
-        // Native ARCore Trigger — send message to React Native to launch Scene Viewer
-        document.getElementById('btn-native-ar').addEventListener('click', () => {
-            console.log("Launch ARCore Camera clicked, modelUrl:", modelUrl);
-            
-            // Check if we are inside a React Native WebView
-            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                // Send the model URL to React Native so it can open Scene Viewer natively
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'launch_ar',
-                    modelUrl: modelUrl
-                }));
-                console.log("postMessage sent to React Native");
-            } else {
-                // Fallback: we're in a regular browser — construct Scene Viewer URL directly
-                const sceneViewerUrl = `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(modelUrl)}&mode=ar_preferred`;
-                console.log("Opening Scene Viewer directly:", sceneViewerUrl);
-                window.location.href = sceneViewerUrl;
-            }
-        });
+        setupUIEvents();
+        setupPrecisionSensors();
     }
 
     function onSelect() {
-        if (reticle.visible) {
-            // Anchor model to the tapped floor position
-            modelGroup.position.setFromMatrixPosition(reticle.matrix);
-            modelGroup.visible = true;
-            modelPlaced = true;
-            reticle.visible = false;
-        } else if (!modelPlaced && modelLoaded) {
-            // If no reticle (no floor detected), place 1.5m in front of camera
-            modelGroup.position.set(0, 0, -1.5);
-            modelGroup.visible = true;
-            modelPlaced = true;
+        if (reticle.visible && !modelPlaced) {
+            // Signal the render loop to create an anchor at the reticle's pose
+            userTapped = true;
         }
     }
 
-    // Phase 5: Assembly Animation Logic
-    function scatterParts() {
-        parts.forEach((part, index) => {
-            // Move parts high up in the air initially
-            part.position.y += 3;
-            // Optionally add some random rotation
-            part.rotation.z += Math.PI * 0.5;
-        });
-    }
+    function setupUIEvents() {
+        const btnSolid = document.getElementById('btn-solid');
+        const btnWireframe = document.getElementById('btn-wireframe');
+        const btnXray = document.getElementById('btn-xray');
+        const btnReset = document.getElementById('btn-reset');
 
-    function playAssemblyAnimation() {
-        const btn = document.getElementById('btn-assemble');
-        btn.disabled = true;
-        btn.textContent = "Assembling...";
+        const setActive = (btn) => {
+            [btnSolid, btnWireframe, btnXray].forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        };
 
-        // Use GSAP to animate parts to their original position
-        gsap.to(parts.map(p => p.position), {
-            y: (i) => parts[i].userData.originalPosition.y,
-            duration: 1.5,
-            ease: "bounce.out",
-            stagger: 0.1,
+        // A. Solid Mode
+        btnSolid.addEventListener('click', () => {
+            setActive(btnSolid);
+            modelGroup.traverse((child) => {
+                if (child.isMesh && originalMaterials.has(child.uuid)) {
+                    child.material = originalMaterials.get(child.uuid).clone();
+                }
+            });
         });
 
-        gsap.to(parts.map(p => p.rotation), {
-            z: 0,
-            duration: 1.5,
-            ease: "power2.out",
-            stagger: 0.1,
-            onComplete: () => {
-                btn.textContent = "Assemble Again";
-                btn.disabled = false;
-                // Prepare for next click by scattering again behind the scenes?
-                // Actually, let's just make it a one-way toggle or reset on click
-                btn.onclick = () => {
-                    scatterParts();
-                    setTimeout(playAssemblyAnimation, 50);
-                };
+        // B. Wireframe Mode
+        btnWireframe.addEventListener('click', () => {
+            setActive(btnWireframe);
+            modelGroup.traverse((child) => {
+                if (child.isMesh && originalMaterials.has(child.uuid)) {
+                    const solidMat = originalMaterials.get(child.uuid);
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: solidMat.color,
+                        wireframe: true,
+                    });
+                }
+            });
+        });
+
+        // C. X-Ray Mode
+        btnXray.addEventListener('click', () => {
+            setActive(btnXray);
+            modelGroup.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: 0x00aaff, // Holographic blue tint
+                        transparent: true,
+                        opacity: 0.35,
+                        depthWrite: false, // Disables depth sorting issues, allows seeing inside
+                        side: THREE.DoubleSide,
+                        metalness: 0.1,
+                        roughness: 0.2
+                    });
+                }
+            });
+        });
+
+        // Native ARCore Launch (works on HTTP)
+        document.getElementById('btn-native-ar').addEventListener('click', () => {
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'launch_ar', modelUrl }));
+            } else {
+                const url = `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(modelUrl)}&mode=ar_preferred`;
+                window.location.href = url;
+            }
+        });
+
+        // Reset Placement
+        btnReset.addEventListener('click', () => {
+            modelPlaced = false;
+            modelGroup.visible = false;
+            btnReset.style.display = 'none';
+            modelInitialYaw = 0;
+            anchorInitialYaw = 0;
+            hasAnchorInitialYaw = false;
+            
+            // Delete anchor if possible
+            if (xrAnchor) {
+                try {
+                    xrAnchor.delete();
+                } catch(e) {
+                    console.log("Anchor deletion not supported/failed", e);
+                }
+                xrAnchor = null;
             }
         });
     }
 
+    function setupPrecisionSensors() {
+        // 1. Geolocation (GPS) tracking
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition((position) => {
+                const lat = position.coords.latitude.toFixed(6);
+                const lon = position.coords.longitude.toFixed(6);
+                const acc = position.coords.accuracy.toFixed(1);
+                const gpsElem = document.getElementById('val-gps');
+                if (gpsElem) {
+                    gpsElem.textContent = `${lat}, ${lon} (±${acc}m)`;
+                }
+            }, (err) => {
+                console.warn("GPS error/denied:", err);
+                const gpsElem = document.getElementById('val-gps');
+                if (gpsElem) gpsElem.textContent = "Unavailable/Denied";
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        } else {
+            const gpsElem = document.getElementById('val-gps');
+            if (gpsElem) gpsElem.textContent = "Not supported";
+        }
+
+        // 2. DeviceMotion (IMU accelerometer + velocity integration)
+        let velocityX = 0, velocityY = 0, velocityZ = 0;
+        let lastMotionTime = performance.now();
+
+        window.addEventListener('devicemotion', (event) => {
+            const acc = event.acceleration; // excluding gravity
+            if (!acc) return;
+
+            const now = performance.now();
+            const dt = (now - lastMotionTime) / 1000; // seconds
+            lastMotionTime = now;
+
+            if (dt > 0 && dt < 1) {
+                // Integrate acceleration to estimate velocity
+                velocityX += (acc.x || 0) * dt;
+                velocityY += (acc.y || 0) * dt;
+                velocityZ += (acc.z || 0) * dt;
+
+                // Apply decay to prevent infinite velocity drift (friction)
+                velocityX *= 0.95;
+                velocityY *= 0.95;
+                velocityZ *= 0.95;
+
+                const speed = Math.sqrt(velocityX*velocityX + velocityY*velocityY + velocityZ*velocityZ);
+                const linAcc = Math.sqrt((acc.x||0)*(acc.x||0) + (acc.y||0)*(acc.y||0) + (acc.z||0)*(acc.z||0));
+
+                const accElem = document.getElementById('val-acc');
+                if (accElem) accElem.textContent = `${linAcc.toFixed(2)} m/s²`;
+
+                const velElem = document.getElementById('val-vel');
+                if (velElem) velElem.textContent = `${speed.toFixed(2)} m/s`;
+            }
+        });
+    }
+ 
     function onWindowResize() {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -353,10 +513,13 @@
     }
 
     function render(timestamp, frame) {
+        // Handle WebXR frame logic
         if (frame) {
             const session = renderer.xr.getSession();
             const referenceSpace = renderer.xr.getReferenceSpace();
+            if (!referenceSpace) return;
 
+            // 1. Request Hit Test Source
             if (hitTestSourceRequested === false) {
                 session.requestReferenceSpace('viewer').then((refSpace) => {
                     session.requestHitTestSource({ space: refSpace }).then((source) => {
@@ -370,27 +533,144 @@
                 hitTestSourceRequested = true;
             }
 
+            // 2. Perform Hit Test (only if model is NOT placed)
             if (hitTestSource && !modelPlaced) {
                 const hitTestResults = frame.getHitTestResults(hitTestSource);
                 if (hitTestResults.length > 0) {
                     const hit = hitTestResults[0];
                     reticle.visible = true;
-                    reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                    
+                    const hitPose = hit.getPose(referenceSpace);
+                    const position = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(hitPose.transform.matrix));
+
+                    // Extract camera's yaw from its quaternion/rotation
+                    const cameraEuler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+                    const cameraYaw = cameraEuler.y;
+
+                    // Position reticle upright and facing the camera's yaw direction
+                    reticle.matrix.makeRotationY(cameraYaw);
+                    reticle.matrix.setPosition(position);
+                    
+                    // 3. User tapped -> Create Persistent XRAnchor
+                    if (userTapped) {
+                        userTapped = false;
+                        
+                        // Set model position and rotation immediately (perfectly upright, facing camera)
+                        modelGroup.position.copy(position);
+                        modelGroup.rotation.set(0, cameraYaw, 0);
+                        modelGroup.updateMatrix();
+
+                        modelInitialYaw = cameraYaw;
+                        modelPlaced = true;
+                        reticle.visible = false;
+                        modelGroup.visible = true;
+                        document.getElementById('btn-reset').style.display = 'block';
+
+                        // Request persistent anchor creation using standard hit.createAnchor or fallback frame.createAnchor
+                        let anchorPromise = null;
+                        if (typeof hit.createAnchor === 'function') {
+                            console.log("Creating anchor using hit.createAnchor()...");
+                            anchorPromise = hit.createAnchor();
+                        } else if (typeof frame.createAnchor === 'function') {
+                            console.log("Creating anchor using frame.createAnchor()...");
+                            anchorPromise = frame.createAnchor(hitPose.transform, referenceSpace);
+                        }
+
+                        if (anchorPromise) {
+                            anchorPromise.then((anchor) => {
+                                console.log("Anchor created successfully:", anchor);
+                                xrAnchor = anchor;
+                                hasAnchorInitialYaw = false;
+                            }).catch((err) => {
+                                console.error("Failed to create XRAnchor, keeping static fallback:", err);
+                            });
+                        } else {
+                            console.warn("Anchors API not supported. Relying on static local-floor placement.");
+                        }
+                    }
                 } else {
                     reticle.visible = false;
                 }
+            } else if (modelPlaced) {
+                reticle.visible = false; // Ensure reticle stays hidden
+            }
+
+            // 4. Update Model Position from XRAnchor (Absolute Precision)
+            if (modelPlaced && xrAnchor) {
+                // Get the updated pose of our anchor directly from the frame space
+                const anchorPose = frame.getPose(xrAnchor.anchorSpace, referenceSpace);
+                if (anchorPose) {
+                    const matrix = new THREE.Matrix4().fromArray(anchorPose.transform.matrix);
+                    
+                    // Update position
+                    modelGroup.position.setFromMatrixPosition(matrix);
+                    
+                    const anchorEuler = new THREE.Euler().setFromRotationMatrix(matrix, 'YXZ');
+                    const currentYaw = anchorEuler.y;
+                    
+                    if (!hasAnchorInitialYaw) {
+                        anchorInitialYaw = currentYaw;
+                        hasAnchorInitialYaw = true;
+                    }
+                    
+                    // Maintain perfectly upright orientation, only rotating by the tracking yaw difference
+                    const yawDiff = currentYaw - anchorInitialYaw;
+                    modelGroup.rotation.set(0, modelInitialYaw + yawDiff, 0);
+                    modelGroup.updateMatrix();
+                }
+            }
+
+            // Update sensor status panel in AR
+            const cameraEuler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+            const pitchDeg = (cameraEuler.x * (180 / Math.PI)).toFixed(1);
+            const rollDeg = (cameraEuler.z * (180 / Math.PI)).toFixed(1);
+            const yawDeg = (cameraEuler.y * (180 / Math.PI)).toFixed(1);
+            
+            document.getElementById('val-tilt').textContent = `${pitchDeg}° / ${rollDeg}°`;
+            document.getElementById('val-yaw').textContent = `${yawDeg}°`;
+            
+            if (modelPlaced) {
+                if (xrAnchor) {
+                    document.getElementById('val-anchor').textContent = 'PINS-LOCKED (SLAM)';
+                    document.getElementById('val-anchor').style.color = '#00ffcc';
+                } else {
+                    document.getElementById('val-anchor').textContent = 'STATIC (Fallback)';
+                    document.getElementById('val-anchor').style.color = '#ffcc00';
+                }
+            } else {
+                document.getElementById('val-anchor').textContent = reticle.visible ? 'PLANE DETECTED' : 'SCANNING...';
+                document.getElementById('val-anchor').style.color = reticle.visible ? '#00ffcc' : '#ff3333';
             }
         }
 
-        // Slow rotation for preview mode (not AR)
+        // Preview rotation (only when NOT in AR)
         if (!renderer.xr.isPresenting) {
             modelGroup.rotation.y += 0.005;
+            if (controls.enabled) controls.update();
         }
-        if (controls.enabled) controls.update();
+
+        // Synchronize Three.js camera pose with active WebXR camera for label projection (avoids CSS2D drift when tilting)
+        if (renderer.xr.enabled && renderer.xr.isPresenting) {
+            const xrCamera = renderer.xr.getCamera();
+            if (xrCamera.cameras && xrCamera.cameras.length > 0) {
+                const activeCamera = xrCamera.cameras[0];
+                camera.position.copy(activeCamera.position);
+                camera.quaternion.copy(activeCamera.quaternion);
+                camera.projectionMatrix.copy(activeCamera.projectionMatrix);
+                camera.matrixWorld.copy(activeCamera.matrixWorld);
+                camera.matrixWorldInverse.copy(activeCamera.matrixWorldInverse);
+            } else {
+                camera.position.copy(xrCamera.position);
+                camera.quaternion.copy(xrCamera.quaternion);
+                camera.projectionMatrix.copy(xrCamera.projectionMatrix);
+                camera.matrixWorld.copy(xrCamera.matrixWorld);
+                camera.matrixWorldInverse.copy(xrCamera.matrixWorldInverse);
+            }
+        }
+
         renderer.render(scene, camera);
         labelRenderer.render(scene, camera);
     }
-
 </script>
 
 </body>

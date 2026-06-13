@@ -7,7 +7,7 @@
 
 // For Android emulator, 10.0.2.2 maps to host machine's localhost
 // For real device on same WiFi, use your laptop's LAN IP
-export const API_BASE_URL = 'http://192.168.9.249:8000';
+export const API_BASE_URL = 'https://shiny-feet-enjoy.loca.lt';
 
 // API endpoints
 export const API = {

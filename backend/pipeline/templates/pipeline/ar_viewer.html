@@ -3,117 +3,261 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Three.js WebXR Precision Anchors</title>
+    <title>CAD2Reality — AR Viewer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            margin: 0;
             overflow: hidden;
-            background-color: #121212;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0a;
+            font-family: 'Inter', sans-serif;
             color: white;
+            touch-action: none;
         }
-        #container {
-            width: 100vw;
-            height: 100vh;
-        }
-        /* Floating UI Panel */
-        #ui-panel {
+        #container { width: 100vw; height: 100vh; }
+
+        /* ── Top status bar ───────────────────────── */
+        #top-bar {
             position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
+            top: 0; left: 0; right: 0;
+            padding: 14px 18px;
             display: flex;
-            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+            z-index: 200;
+            pointer-events: none;
+        }
+        #app-title {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #fff;
+        }
+        #app-title span {
+            color: #00e5ff;
+        }
+        #status-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(0,229,255,0.15);
+            border: 1px solid rgba(0,229,255,0.5);
+            color: #00e5ff;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* ── Scan instruction overlay ────────────── */
+        #scan-overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 150;
+            pointer-events: none;
+            display: none;
+        }
+        #scan-ring {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            border: 2px solid rgba(0,229,255,0.4);
+            margin: 0 auto 16px;
+            position: relative;
+            animation: pulse-ring 2s ease-in-out infinite;
+        }
+        #scan-ring::before {
+            content: '';
+            position: absolute;
+            inset: 10px;
+            border-radius: 50%;
+            border: 2px solid rgba(0,229,255,0.25);
+        }
+        #scan-ring::after {
+            content: '';
+            position: absolute;
+            inset: 20px;
+            border-radius: 50%;
+            background: rgba(0,229,255,0.05);
+        }
+        @keyframes pulse-ring {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.08); opacity: 0.4; }
+        }
+        #scan-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.85);
+            line-height: 1.5;
+        }
+        #scan-text strong {
+            color: #00e5ff;
+            display: block;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        /* ── Place instruction ───────────────────── */
+        #place-hint {
+            position: absolute;
+            bottom: 200px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.8);
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            padding: 8px 18px;
+            z-index: 150;
+            display: none;
+            pointer-events: none;
+        }
+
+        /* ── Gesture hint after placement ────────── */
+        #gesture-hint {
+            position: absolute;
+            top: 80px; left: 50%;
+            transform: translateX(-50%);
+            font-size: 11px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.65);
+            background: rgba(0,0,0,0.45);
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 16px;
+            padding: 6px 14px;
+            z-index: 150;
+            display: none;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        /* ── Bottom control panel ─────────────────── */
+        #bottom-panel {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 20px 20px 36px;
+            background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+            z-index: 200;
+            display: none;
+        }
+        #render-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 14px;
+        }
+        .render-btn {
+            flex: 1;
+            max-width: 110px;
+            padding: 10px 6px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.9);
+            font-size: 11px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .render-btn.active {
+            background: rgba(0,229,255,0.2);
+            border-color: #00e5ff;
+            color: #00e5ff;
+        }
+        .render-btn:active { transform: scale(0.95); }
+
+        #action-row {
+            display: flex;
             gap: 10px;
             justify-content: center;
-            z-index: 100;
-            width: 90%;
-            max-width: 400px;
-            display: none; /* Hidden until AR/3D loads */
         }
-        button {
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+        .action-btn {
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
             color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            transition: all 0.2s ease;
-        }
-        button:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-        button.active {
-            background: rgba(0, 255, 204, 0.4);
-            border-color: #00ffcc;
-        }
-        #btn-native-ar {
-            background: rgba(0, 180, 80, 0.7);
-            border-color: rgba(0, 255, 100, 0.8);
-            width: 100%;
-            margin-top: 5px;
-        }
-        #btn-reset {
-            display: none;
-        }
-        #https-hint {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 160, 0, 0.85);
-            color: #121212;
-            padding: 8px 16px;
-            border-radius: 8px;
             font-size: 13px;
             font-weight: 600;
-            z-index: 200;
-            text-align: center;
-            display: none;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(10px);
         }
+        .action-btn:active { transform: scale(0.95); }
+        #btn-reset { background: rgba(255,80,80,0.2); border-color: rgba(255,80,80,0.5); }
+        #btn-native-ar { background: rgba(0,200,80,0.2); border-color: rgba(0,200,80,0.5); color: #4dff91; }
+        #btn-ar-webxr {
+            background: rgba(0,229,255,0.2);
+            border-color: rgba(0,229,255,0.5);
+            color: #00e5ff;
+            width: 100%;
+            margin-bottom: 10px;
+            font-size: 15px;
+            padding: 15px;
+        }
+
+        /* ── Sensor panel ──────────────────────────── */
         #sensor-panel {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(0, 255, 204, 0.3);
-            border-radius: 8px;
-            padding: 10px 14px;
-            font-family: monospace;
-            font-size: 11px;
-            color: #00ffcc;
+            top: 70px; right: 14px;
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,229,255,0.2);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-family: 'Inter', monospace;
+            font-size: 10px;
+            color: #00e5ff;
             z-index: 150;
             pointer-events: none;
             display: none;
             flex-direction: column;
-            gap: 4px;
-            min-width: 180px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            gap: 3px;
+            min-width: 160px;
         }
-        .sensor-row {
-            display: flex;
-            justify-content: space-between;
+        .srow { display: flex; justify-content: space-between; gap: 8px; }
+        .slabel { color: rgba(255,255,255,0.5); }
+        .sval { font-weight: 600; text-align: right; }
+
+        /* ── HTTPS hint ────────────────────────────── */
+        #https-hint {
+            position: absolute;
+            top: 70px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,150,0,0.9);
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            z-index: 300;
+            text-align: center;
+            display: none;
+            max-width: 80%;
         }
-        .sensor-label {
-            color: rgba(255, 255, 255, 0.7);
-        }
-        .sensor-val {
-            font-weight: bold;
-        }
-        .dimension-label {
-            color: #00ffcc;
-            font-family: monospace;
-            font-size: 13px;
-            font-weight: bold;
-            padding: 3px 7px;
-            background: rgba(0,0,0,0.7);
-            border: 1px solid #00ffcc;
-            border-radius: 4px;
+
+        /* ── Scale indicator ring ─────────────────── */
+        #scale-indicator {
+            position: absolute;
+            bottom: 240px; right: 20px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.8);
+            z-index: 150;
+            display: none;
             pointer-events: none;
         }
     </style>
@@ -122,556 +266,692 @@
 
 <div id="container"></div>
 
-<!-- HTTPS Hint -->
-<div id="https-hint">⚠️ WebXR camera needs HTTPS. Use the ARCore button below instead!</div>
+<!-- Top bar -->
+<div id="top-bar">
+    <div id="app-title">CAD<span>2</span>Reality</div>
+    <div id="status-badge" id="status-badge">● SCANNING</div>
+</div>
 
-<!-- Precision Status Overlay -->
+<!-- HTTPS hint -->
+<div id="https-hint">⚠️ Open in Chrome for full AR. Tap ARCore button below!</div>
+
+<!-- Scan ring overlay -->
+<div id="scan-overlay">
+    <div id="scan-ring"></div>
+    <div id="scan-text">
+        <strong>Scanning Surface</strong>
+        Move your phone slowly over the floor
+    </div>
+</div>
+
+<!-- Place hint -->
+<div id="place-hint">👆 Tap to place your model</div>
+
+<!-- Gesture hint (shown after placement) -->
+<div id="gesture-hint">🤏 Pinch: Scale &nbsp;|&nbsp; ☝️ Drag: Rotate</div>
+
+<!-- Scale indicator -->
+<div id="scale-indicator">Scale: 1.0×</div>
+
+<!-- Sensor panel -->
 <div id="sensor-panel">
-    <div class="sensor-row"><span class="sensor-label">Tracking:</span> <span id="val-tracking" class="sensor-val">WebXR SLAM</span></div>
-    <div class="sensor-row"><span class="sensor-label">Tilt (P/R):</span> <span id="val-tilt" class="sensor-val">0.0° / 0.0°</span></div>
-    <div class="sensor-row"><span class="sensor-label">Yaw (Heading):</span> <span id="val-yaw" class="sensor-val">0.0°</span></div>
-    <div class="sensor-row"><span class="sensor-label">GPS Coord:</span> <span id="val-gps" class="sensor-val">Acquiring...</span></div>
-    <div class="sensor-row"><span class="sensor-label">IMU Accel:</span> <span id="val-acc" class="sensor-val">0.00 m/s²</span></div>
-    <div class="sensor-row"><span class="sensor-label">IMU Velocity:</span> <span id="val-vel" class="sensor-val">0.00 m/s</span></div>
-    <div class="sensor-row"><span class="sensor-label">Anchor State:</span> <span id="val-anchor" class="sensor-val">Scanning...</span></div>
+    <div class="srow"><span class="slabel">Mode:</span><span class="sval" id="val-tracking">WebXR SLAM</span></div>
+    <div class="srow"><span class="slabel">Anchor:</span><span class="sval" id="val-anchor">Scanning…</span></div>
+    <div class="srow"><span class="slabel">Pitch/Roll:</span><span class="sval" id="val-tilt">—</span></div>
+    <div class="srow"><span class="slabel">Heading:</span><span class="sval" id="val-yaw">—</span></div>
+    <div class="srow"><span class="slabel">GPS:</span><span class="sval" id="val-gps">Acquiring…</span></div>
+    <div class="srow"><span class="slabel">Accel:</span><span class="sval" id="val-acc">0.00 m/s²</span></div>
 </div>
 
-<!-- Floating UI -->
-<div id="ui-panel">
-    <button id="btn-solid" class="active">🔵 Solid</button>
-    <button id="btn-wireframe">⬡ Wireframe</button>
-    <button id="btn-xray">💠 X-Ray</button>
-    <button id="btn-native-ar">📷 Launch ARCore Camera</button>
-    <button id="btn-reset">🔄 Reset Placement</button>
+<!-- Bottom panel (shown after model loads) -->
+<div id="bottom-panel">
+    <!-- Render mode row -->
+    <div id="render-row">
+        <button class="render-btn active" id="btn-solid">🔵 Solid</button>
+        <button class="render-btn" id="btn-wireframe">⬡ Wire</button>
+        <button class="render-btn" id="btn-xray">💠 X-Ray</button>
+    </div>
+    <!-- Action buttons -->
+    <div id="action-row">
+        <button class="action-btn" id="btn-native-ar">📷 ARCore View</button>
+        <button class="action-btn" id="btn-reset">🔄 Reposition</button>
+    </div>
 </div>
 
-<!-- Three.js Dependencies -->
+<!-- Three.js import map -->
 <script type="importmap">
-  {
+{
     "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
     }
-  }
+}
 </script>
 
 <script type="module">
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-    import { ARButton } from 'three/addons/webxr/ARButton.js';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-    let camera, scene, renderer, labelRenderer, controls;
-    
-    // Model State
-    let modelGroup = new THREE.Group();
-    let originalMaterials = new Map();
-    let modelLoaded = false;
-    
-    // AR & Anchor State
-    let reticle;
-    let hitTestSource = null;
-    let hitTestSourceRequested = false;
-    let modelPlaced = false;
-    let userTapped = false;
-    let xrAnchor = null;
-    let modelInitialYaw = 0;
-    let anchorInitialYaw = 0;
-    let hasAnchorInitialYaw = false;
+// ─── Template variables ─────────────────────────────────────────────────────
+const modelUrl   = "{{ model_url|safe }}";
+const modelWidth = parseFloat("{{ model_width|default:'0' }}");
+const modelHeight = parseFloat("{{ model_height|default:'0' }}");
 
-    const modelUrl = "{{ model_url|safe }}";
-    const modelWidth = parseFloat("{{ model_width|default:'0' }}");
-    const modelHeight = parseFloat("{{ model_height|default:'0' }}");
+// ─── Three.js state ─────────────────────────────────────────────────────────
+let camera, scene, renderer, controls;
+let modelGroup   = new THREE.Group();
+let originalMats = new Map();
+let shadowPlane;
+let modelLoaded  = false;
 
-    init();
-    animate();
+// ─── AR / Anchor state ───────────────────────────────────────────────────────
+let reticle;
+let hitTestSource = null;
+let hitTestRequested = false;
+let modelPlaced  = false;
+let userTapped   = false;
+let xrAnchor     = null;
+let placedYaw    = 0;
+let anchorInitialYaw = 0;
+let hasAnchorInitialYaw = false;
 
-    function init() {
-        const container = document.getElementById('container');
+// ─── Gesture state (touch) ───────────────────────────────────────────────────
+let gestureState = {
+    isPinching: false,
+    isRotating: false,
+    startPinchDist: 0,
+    startScale: 1,
+    currentScale: 1,
+    startRotY: 0,
+    startTouchX: 0,
+    lastTouchX: 0,
+};
 
-        // 1. Setup Scene
-        scene = new THREE.Scene();
-        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-        
-        const dirLight = new THREE.DirectionalLight(0xffffff, 2);
-        dirLight.position.set(5, 10, 7.5);
-        scene.add(dirLight);
+// ─── UI elements ─────────────────────────────────────────────────────────────
+const $  = (id) => document.getElementById(id);
+const statusBadge  = $('status-badge');
+const scanOverlay  = $('scan-overlay');
+const placeHint    = $('place-hint');
+const gestureHint  = $('gesture-hint');
+const bottomPanel  = $('bottom-panel');
+const scaleIndicator = $('scale-indicator');
+const sensorPanel  = $('sensor-panel');
 
-        // 2. Setup Camera
-        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.5, 4);
+// ─── Init ────────────────────────────────────────────────────────────────────
+init();
+animate();
 
-        // 3. Setup Renderer with WebXR + live camera passthrough
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        renderer.setClearColor(0x000000, 0); // Transparent = camera passthrough in AR
-        container.appendChild(renderer.domElement);
+function init() {
+    const container = $('container');
 
-        // CSS2D Renderer for dimension labels
-        labelRenderer = new CSS2DRenderer();
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
-        labelRenderer.domElement.style.position = 'absolute';
-        labelRenderer.domElement.style.top = '0px';
-        labelRenderer.domElement.style.pointerEvents = 'none';
-        container.appendChild(labelRenderer.domElement);
+    // Scene
+    scene = new THREE.Scene();
 
-        // 4. OrbitControls (for 3D preview mode)
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.set(0, 1, 0);
-        controls.update();
+    // Lighting — professional 3-point lighting for BIM model feel
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
 
-        // 5. AR Button (requires hit-test, optional anchors)
-        const arButton = ARButton.createButton(renderer, { 
-            requiredFeatures: ['hit-test'],
-            optionalFeatures: ['anchors']
-        });
-        arButton.style.position = 'absolute';
-        arButton.style.bottom = '180px'; // Above our floating UI
-        document.body.appendChild(arButton);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    dirLight.position.set(3, 6, 4);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048, 2048);
+    dirLight.shadow.camera.near = 0.1;
+    dirLight.shadow.camera.far = 20;
+    dirLight.shadow.camera.left = dirLight.shadow.camera.bottom = -3;
+    dirLight.shadow.camera.right = dirLight.shadow.camera.top = 3;
+    scene.add(dirLight);
 
-        // Detect if page is on HTTP (no HTTPS) and show hint
-        if (window.location.protocol === 'http:') {
-            document.getElementById('https-hint').style.display = 'block';
+    const fillLight = new THREE.DirectionalLight(0x88ccff, 0.6);
+    fillLight.position.set(-3, 2, -2);
+    scene.add(fillLight);
+
+    // Camera
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+    camera.position.set(0, 1.5, 3);
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    renderer.setClearColor(0x000000, 0);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // Orbit controls (preview mode only)
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.25, 0);
+    controls.minDistance = 0.5;
+    controls.maxDistance = 8;
+    controls.update();
+
+    // AR button — optional anchors so it launches on any device
+    const arButton = ARButton.createButton(renderer, {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['anchors', 'dom-overlay'],
+        domOverlay: { root: document.body }
+    });
+    arButton.id = 'btn-ar-webxr';
+    arButton.className = 'action-btn';
+    arButton.style.cssText = `
+        position: absolute;
+        bottom: 240px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 260px;
+        padding: 16px;
+        font-size: 15px;
+        font-weight: 700;
+        border-radius: 14px;
+        background: rgba(0,229,255,0.2);
+        border: 2px solid rgba(0,229,255,0.7);
+        color: #00e5ff;
+        font-family: Inter, sans-serif;
+        z-index: 300;
+    `;
+    document.body.appendChild(arButton);
+
+    if (window.location.protocol === 'http:') {
+        $('https-hint').style.display = 'block';
+    }
+
+    // Reticle (placement indicator ring)
+    const reticleGeo = new THREE.RingGeometry(0.08, 0.12, 36).rotateX(-Math.PI / 2);
+    const reticleMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, side: THREE.DoubleSide });
+    reticle = new THREE.Mesh(reticleGeo, reticleMat);
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    scene.add(reticle);
+
+    // Shadow plane (visible under the placed model)
+    const shadowGeo = new THREE.PlaneGeometry(4, 4);
+    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.35 });
+    shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
+    shadowPlane.rotation.x = -Math.PI / 2;
+    shadowPlane.receiveShadow = true;
+    shadowPlane.visible = false;
+    scene.add(shadowPlane);
+
+    // XR Controller tap
+    const controller = renderer.xr.getController(0);
+    controller.addEventListener('select', onSelect);
+    scene.add(controller);
+
+    // Session events
+    renderer.xr.addEventListener('sessionstart', onSessionStart);
+    renderer.xr.addEventListener('sessionend', onSessionEnd);
+
+    // Load model
+    scene.add(modelGroup);
+    loadModel();
+
+    // Touch gestures for AR manipulation
+    setupTouchGestures();
+
+    // Precision sensors
+    setupSensors();
+
+    window.addEventListener('resize', onResize);
+    setupUI();
+}
+
+// ─── Load GLTF ───────────────────────────────────────────────────────────────
+function loadModel() {
+    const loader = new GLTFLoader();
+    loader.load(modelUrl, (gltf) => {
+        const model = gltf.scene;
+
+        // Normalize size to ~0.8m tall in AR
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) {
+            const scale = 0.8 / maxDim;
+            model.scale.setScalar(scale);
         }
 
-        // 6. Reticle (Hit-test indicator)
-        const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
-        const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-        reticle.matrixAutoUpdate = false;
-        reticle.visible = false;
-        scene.add(reticle);
+        // Center horizontally, sit on Y=0
+        const box2 = new THREE.Box3().setFromObject(model);
+        model.position.x = -center.x * model.scale.x;
+        model.position.y = -box2.min.y;
+        model.position.z = -center.z * model.scale.z;
 
-        // 7. Controller / Tap Event
-        const controller = renderer.xr.getController(0);
-        controller.addEventListener('select', onSelect);
-        scene.add(controller);
-
-        // WebXR Session Events
-        renderer.xr.addEventListener('sessionstart', () => {
-            document.getElementById('ui-panel').style.display = 'flex';
-            document.getElementById('sensor-panel').style.display = 'flex';
-            document.getElementById('https-hint').style.display = 'none'; // Hide hint in AR
-            document.getElementById('btn-reset').style.display = 'none';
-            controls.enabled = false;
-            modelGroup.visible = false;
-            modelPlaced = false;
-            xrAnchor = null;
-            modelInitialYaw = 0;
-            anchorInitialYaw = 0;
-            hasAnchorInitialYaw = false;
-        });
-
-        renderer.xr.addEventListener('sessionend', () => {
-            controls.enabled = true;
-            modelGroup.visible = true;
-            modelPlaced = false;
-            xrAnchor = null;
-            modelGroup.position.set(0, 0, 0);
-            modelGroup.quaternion.identity();
-            document.getElementById('btn-reset').style.display = 'none';
-            document.getElementById('sensor-panel').style.display = 'none';
-            if (window.location.protocol === 'http:') {
-                document.getElementById('https-hint').style.display = 'block';
-            }
-        });
-
-        // 8. Load Model
-        scene.add(modelGroup);
-        const loader = new GLTFLoader();
-        
-        loader.load(modelUrl, (gltf) => {
-            const loadedModel = gltf.scene;
-            
-            // Normalize scale for AR (~0.5m)
-            const box = new THREE.Box3().setFromObject(loadedModel);
-            const size = box.getSize(new THREE.Vector3());
-            const center = box.getCenter(new THREE.Vector3());
-            
-            const maxDim = Math.max(size.x, size.y, size.z);
-            if (maxDim > 0) {
-                const targetSize = 0.5;
-                const scaleFactor = targetSize / maxDim;
-                loadedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
-            }
-            
-            // Center model and align bottom to ground (y=0)
-            const newBox = new THREE.Box3().setFromObject(loadedModel);
-            loadedModel.position.x = -center.x * loadedModel.scale.x;
-            loadedModel.position.y = -newBox.min.y;
-            loadedModel.position.z = -center.z * loadedModel.scale.z;
-
-            // Cache original materials for Solid mode
-            loadedModel.traverse((child) => {
-                if (child.isMesh) {
-                    // Ensure a standard material if none exists or if it's basic
-                    if (!child.material || child.material.type !== 'MeshStandardMaterial') {
-                         child.material = new THREE.MeshStandardMaterial({
-                             color: child.material ? child.material.color : 0x888888,
-                             metalness: 0.5,
-                             roughness: 0.5
-                         });
-                    }
-                    originalMaterials.set(child.uuid, child.material.clone());
+        // Enable shadows + cache materials
+        model.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (!child.material || !(child.material instanceof THREE.MeshStandardMaterial)) {
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: child.material?.color ?? 0x888888,
+                        metalness: 0.3,
+                        roughness: 0.6
+                    });
                 }
-            });
-
-            modelGroup.add(loadedModel);
-            modelLoaded = true;
-            document.getElementById('ui-panel').style.display = 'flex';
-
-            // Dimension Labels
-            if (modelWidth > 0 && modelHeight > 0) {
-                const newBox2 = new THREE.Box3().setFromObject(loadedModel);
-                const widthDiv = document.createElement('div');
-                widthDiv.className = 'dimension-label';
-                widthDiv.textContent = `W: ${modelWidth} mm`;
-                const widthLabel = new CSS2DObject(widthDiv);
-                widthLabel.position.set(0, newBox2.max.y + 0.1, 0);
-                loadedModel.add(widthLabel);
-
-                const heightDiv = document.createElement('div');
-                heightDiv.className = 'dimension-label';
-                heightDiv.textContent = `H: ${modelHeight} mm`;
-                const heightLabel = new CSS2DObject(heightDiv);
-                heightLabel.position.set(newBox2.max.x + 0.1, 0, 0);
-                loadedModel.add(heightLabel);
+                originalMats.set(child.uuid, child.material.clone());
             }
-
-        }, undefined, (error) => {
-            console.error('Error loading model:', error);
         });
 
-        window.addEventListener('resize', onWindowResize);
-        setupUIEvents();
-        setupPrecisionSensors();
-    }
+        modelGroup.add(model);
+        modelLoaded = true;
+        bottomPanel.style.display = 'block';
 
-    function onSelect() {
-        if (reticle.visible && !modelPlaced) {
-            // Signal the render loop to create an anchor at the reticle's pose
-            userTapped = true;
+        // Dimension label as 3D sprite (not CSS2D — works in AR)
+        if (modelWidth > 0 && modelHeight > 0) {
+            addDimensionSprite(box2, modelWidth, modelHeight, model.scale.x);
         }
+
+    }, undefined, (err) => {
+        console.error('Model load error:', err);
+    });
+}
+
+// ─── Dimension label as canvas texture sprite ─────────────────────────────
+function addDimensionSprite(box, w, h, scale) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 340; canvas.height = 60;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    roundRect(ctx, 0, 0, 340, 60, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 2;
+    roundRect(ctx, 0, 0, 340, 60, 12);
+    ctx.stroke();
+    ctx.fillStyle = '#00e5ff';
+    ctx.font = 'bold 22px Inter, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`W: ${w} mm  ×  H: ${h} mm`, 170, 38);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(0.5, 0.09, 1);
+    sprite.position.set(0, box.max.y + 0.12, 0);
+    modelGroup.add(sprite);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// ─── Session events ───────────────────────────────────────────────────────────
+function onSessionStart() {
+    controls.enabled = false;
+    modelGroup.visible = false;
+    modelPlaced = false;
+    xrAnchor = null;
+    placedYaw = 0;
+    hasAnchorInitialYaw = false;
+    shadowPlane.visible = false;
+
+    scanOverlay.style.display = 'block';
+    placeHint.style.display = 'none';
+    gestureHint.style.display = 'none';
+    scaleIndicator.style.display = 'none';
+    sensorPanel.style.display = 'flex';
+    $('btn-reset').style.display = 'none';
+    $('https-hint').style.display = 'none';
+    updateStatus('SCANNING', '#00e5ff');
+}
+
+function onSessionEnd() {
+    controls.enabled = true;
+    modelGroup.visible = true;
+    modelPlaced = false;
+    xrAnchor = null;
+    modelGroup.position.set(0, 0, 0);
+    modelGroup.rotation.set(0, 0, 0);
+    gestureState.currentScale = 1;
+    modelGroup.scale.setScalar(1);
+    shadowPlane.visible = false;
+
+    scanOverlay.style.display = 'none';
+    placeHint.style.display = 'none';
+    gestureHint.style.display = 'none';
+    scaleIndicator.style.display = 'none';
+    sensorPanel.style.display = 'none';
+    updateStatus('PREVIEW', 'rgba(255,255,255,0.6)');
+
+    if (window.location.protocol === 'http:') {
+        $('https-hint').style.display = 'block';
+    }
+}
+
+function updateStatus(text, color) {
+    statusBadge.textContent = `● ${text}`;
+    statusBadge.style.color = color;
+    statusBadge.style.borderColor = color;
+    statusBadge.style.background = color.replace(')', ', 0.12)').replace('rgb', 'rgba');
+}
+
+// ─── On Tap (XR controller select) ──────────────────────────────────────────
+function onSelect() {
+    if (reticle.visible && !modelPlaced) {
+        userTapped = true;
+    }
+}
+
+// ─── Touch gestures ──────────────────────────────────────────────────────────
+function setupTouchGestures() {
+    const canvas = renderer.domElement;
+
+    canvas.addEventListener('touchstart', (e) => {
+        if (!modelPlaced) return;
+        e.preventDefault();
+        if (e.touches.length === 2) {
+            gestureState.isPinching = true;
+            gestureState.isRotating = false;
+            gestureState.startPinchDist = getTouchDist(e.touches);
+            gestureState.startScale = gestureState.currentScale;
+        } else if (e.touches.length === 1) {
+            gestureState.isRotating = true;
+            gestureState.isPinching = false;
+            gestureState.startTouchX = e.touches[0].clientX;
+            gestureState.startRotY = modelGroup.rotation.y;
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (!modelPlaced) return;
+        e.preventDefault();
+
+        if (gestureState.isPinching && e.touches.length === 2) {
+            const dist = getTouchDist(e.touches);
+            const ratio = dist / gestureState.startPinchDist;
+            gestureState.currentScale = Math.max(0.1, Math.min(5, gestureState.startScale * ratio));
+            modelGroup.scale.setScalar(gestureState.currentScale);
+            shadowPlane.scale.setScalar(gestureState.currentScale);
+            scaleIndicator.textContent = `Scale: ${gestureState.currentScale.toFixed(2)}×`;
+            scaleIndicator.style.display = 'block';
+
+        } else if (gestureState.isRotating && e.touches.length === 1) {
+            const dx = e.touches[0].clientX - gestureState.startTouchX;
+            modelGroup.rotation.y = gestureState.startRotY + dx * 0.01;
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) gestureState.isPinching = false;
+        if (e.touches.length < 1) gestureState.isRotating = false;
+        setTimeout(() => { scaleIndicator.style.display = modelPlaced ? 'none' : 'none'; }, 1500);
+    }, { passive: false });
+}
+
+function getTouchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// ─── GPS + IMU sensors ───────────────────────────────────────────────────────
+function setupSensors() {
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+            (pos) => {
+                const lat = pos.coords.latitude.toFixed(5);
+                const lon = pos.coords.longitude.toFixed(5);
+                const acc = pos.coords.accuracy.toFixed(0);
+                const el = $('val-gps');
+                if (el) el.textContent = `${lat}, ${lon} (±${acc}m)`;
+            },
+            () => { const el = $('val-gps'); if (el) el.textContent = 'Denied'; },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
     }
 
-    function setupUIEvents() {
-        const btnSolid = document.getElementById('btn-solid');
-        const btnWireframe = document.getElementById('btn-wireframe');
-        const btnXray = document.getElementById('btn-xray');
-        const btnReset = document.getElementById('btn-reset');
+    window.addEventListener('devicemotion', (e) => {
+        const a = e.acceleration;
+        if (!a) return;
+        const mag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+        const el = $('val-acc');
+        if (el) el.textContent = `${mag.toFixed(2)} m/s²`;
+    });
+}
 
-        const setActive = (btn) => {
-            [btnSolid, btnWireframe, btnXray].forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        };
+// ─── UI buttons ───────────────────────────────────────────────────────────────
+function setupUI() {
+    const btnSolid = $('btn-solid');
+    const btnWire  = $('btn-wireframe');
+    const btnXray  = $('btn-xray');
 
-        // A. Solid Mode
-        btnSolid.addEventListener('click', () => {
-            setActive(btnSolid);
-            modelGroup.traverse((child) => {
-                if (child.isMesh && originalMaterials.has(child.uuid)) {
-                    child.material = originalMaterials.get(child.uuid).clone();
-                }
-            });
-        });
-
-        // B. Wireframe Mode
-        btnWireframe.addEventListener('click', () => {
-            setActive(btnWireframe);
-            modelGroup.traverse((child) => {
-                if (child.isMesh && originalMaterials.has(child.uuid)) {
-                    const solidMat = originalMaterials.get(child.uuid);
-                    child.material = new THREE.MeshStandardMaterial({
-                        color: solidMat.color,
-                        wireframe: true,
-                    });
-                }
-            });
-        });
-
-        // C. X-Ray Mode
-        btnXray.addEventListener('click', () => {
-            setActive(btnXray);
-            modelGroup.traverse((child) => {
-                if (child.isMesh) {
-                    child.material = new THREE.MeshStandardMaterial({
-                        color: 0x00aaff, // Holographic blue tint
-                        transparent: true,
-                        opacity: 0.35,
-                        depthWrite: false, // Disables depth sorting issues, allows seeing inside
-                        side: THREE.DoubleSide,
-                        metalness: 0.1,
-                        roughness: 0.2
-                    });
-                }
-            });
-        });
-
-        // Native ARCore Launch (works on HTTP)
-        document.getElementById('btn-native-ar').addEventListener('click', () => {
-            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'launch_ar', modelUrl }));
-            } else {
-                const url = `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(modelUrl)}&mode=ar_preferred`;
-                window.location.href = url;
-            }
-        });
-
-        // Reset Placement
-        btnReset.addEventListener('click', () => {
-            modelPlaced = false;
-            modelGroup.visible = false;
-            btnReset.style.display = 'none';
-            modelInitialYaw = 0;
-            anchorInitialYaw = 0;
-            hasAnchorInitialYaw = false;
-            
-            // Delete anchor if possible
-            if (xrAnchor) {
-                try {
-                    xrAnchor.delete();
-                } catch(e) {
-                    console.log("Anchor deletion not supported/failed", e);
-                }
-                xrAnchor = null;
-            }
-        });
+    function setActiveRender(btn) {
+        [btnSolid, btnWire, btnXray].forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
     }
 
-    function setupPrecisionSensors() {
-        // 1. Geolocation (GPS) tracking
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition((position) => {
-                const lat = position.coords.latitude.toFixed(6);
-                const lon = position.coords.longitude.toFixed(6);
-                const acc = position.coords.accuracy.toFixed(1);
-                const gpsElem = document.getElementById('val-gps');
-                if (gpsElem) {
-                    gpsElem.textContent = `${lat}, ${lon} (±${acc}m)`;
-                }
-            }, (err) => {
-                console.warn("GPS error/denied:", err);
-                const gpsElem = document.getElementById('val-gps');
-                if (gpsElem) gpsElem.textContent = "Unavailable/Denied";
-            }, {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            });
+    btnSolid.addEventListener('click', () => {
+        setActiveRender(btnSolid);
+        modelGroup.traverse(c => {
+            if (c.isMesh && originalMats.has(c.uuid))
+                c.material = originalMats.get(c.uuid).clone();
+        });
+    });
+
+    btnWire.addEventListener('click', () => {
+        setActiveRender(btnWire);
+        modelGroup.traverse(c => {
+            if (c.isMesh && originalMats.has(c.uuid))
+                c.material = new THREE.MeshStandardMaterial({
+                    color: originalMats.get(c.uuid).color,
+                    wireframe: true
+                });
+        });
+    });
+
+    btnXray.addEventListener('click', () => {
+        setActiveRender(btnXray);
+        modelGroup.traverse(c => {
+            if (c.isMesh)
+                c.material = new THREE.MeshStandardMaterial({
+                    color: 0x00bbff, transparent: true, opacity: 0.32,
+                    depthWrite: false, side: THREE.DoubleSide
+                });
+        });
+    });
+
+    $('btn-reset').addEventListener('click', () => {
+        modelPlaced = false;
+        modelGroup.visible = false;
+        shadowPlane.visible = false;
+        gestureState.currentScale = 1;
+        modelGroup.scale.setScalar(1);
+        scanOverlay.style.display = 'block';
+        placeHint.style.display = 'none';
+        gestureHint.style.display = 'none';
+        $('btn-reset').style.display = 'none';
+        hasAnchorInitialYaw = false;
+        updateStatus('SCANNING', '#00e5ff');
+
+        if (xrAnchor) {
+            try { xrAnchor.delete(); } catch(e) {}
+            xrAnchor = null;
+        }
+    });
+
+    $('btn-native-ar').addEventListener('click', () => {
+        if (window.ReactNativeWebView?.postMessage) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'launch_ar', modelUrl }));
         } else {
-            const gpsElem = document.getElementById('val-gps');
-            if (gpsElem) gpsElem.textContent = "Not supported";
+            window.location.href = `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(modelUrl)}&mode=ar_preferred`;
+        }
+    });
+}
+
+// ─── Resize ───────────────────────────────────────────────────────────────────
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ─── Animate ─────────────────────────────────────────────────────────────────
+function animate() {
+    renderer.setAnimationLoop(render);
+}
+
+// ─── Main render loop ─────────────────────────────────────────────────────────
+function render(timestamp, frame) {
+    if (frame) {
+        const session = renderer.xr.getSession();
+        const refSpace = renderer.xr.getReferenceSpace();
+        if (!refSpace) { renderer.render(scene, camera); return; }
+
+        // ── 1. Request hit-test source once ────────────────────────────────
+        if (!hitTestRequested) {
+            session.requestReferenceSpace('viewer').then(vs => {
+                session.requestHitTestSource({ space: vs }).then(src => {
+                    hitTestSource = src;
+                });
+            });
+            session.addEventListener('end', () => {
+                hitTestRequested = false;
+                hitTestSource = null;
+            });
+            hitTestRequested = true;
         }
 
-        // 2. DeviceMotion (IMU accelerometer + velocity integration)
-        let velocityX = 0, velocityY = 0, velocityZ = 0;
-        let lastMotionTime = performance.now();
+        // ── 2. Hit-test → show reticle ─────────────────────────────────────
+        if (hitTestSource && !modelPlaced) {
+            const results = frame.getHitTestResults(hitTestSource);
+            if (results.length > 0) {
+                const hit = results[0];
+                const hitPose = hit.getPose(refSpace);
+                const hitMatrix = new THREE.Matrix4().fromArray(hitPose.transform.matrix);
+                const hitPos = new THREE.Vector3().setFromMatrixPosition(hitMatrix);
 
-        window.addEventListener('devicemotion', (event) => {
-            const acc = event.acceleration; // excluding gravity
-            if (!acc) return;
+                // Align reticle with floor but face current camera yaw
+                const camEuler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+                reticle.matrix.makeRotationY(camEuler.y);
+                reticle.matrix.setPosition(hitPos);
+                reticle.visible = true;
 
-            const now = performance.now();
-            const dt = (now - lastMotionTime) / 1000; // seconds
-            lastMotionTime = now;
+                // Show place hint once plane is detected
+                if (scanOverlay.style.display !== 'none') {
+                    scanOverlay.style.display = 'none';
+                    placeHint.style.display = 'block';
+                    updateStatus('PLANE FOUND', '#4dff91');
+                }
 
-            if (dt > 0 && dt < 1) {
-                // Integrate acceleration to estimate velocity
-                velocityX += (acc.x || 0) * dt;
-                velocityY += (acc.y || 0) * dt;
-                velocityZ += (acc.z || 0) * dt;
+                // ── 3. User tapped → place model ───────────────────────────
+                if (userTapped) {
+                    userTapped = false;
 
-                // Apply decay to prevent infinite velocity drift (friction)
-                velocityX *= 0.95;
-                velocityY *= 0.95;
-                velocityZ *= 0.95;
+                    // Instantly lock model at hit position — gravity-aligned upright
+                    placedYaw = camEuler.y;
+                    modelGroup.position.copy(hitPos);
+                    modelGroup.rotation.set(0, placedYaw, 0);
+                    modelGroup.scale.setScalar(gestureState.currentScale);
+                    modelGroup.visible = true;
 
-                const speed = Math.sqrt(velocityX*velocityX + velocityY*velocityY + velocityZ*velocityZ);
-                const linAcc = Math.sqrt((acc.x||0)*(acc.x||0) + (acc.y||0)*(acc.y||0) + (acc.z||0)*(acc.z||0));
+                    // Shadow plane at same position
+                    shadowPlane.position.copy(hitPos);
+                    shadowPlane.visible = true;
 
-                const accElem = document.getElementById('val-acc');
-                if (accElem) accElem.textContent = `${linAcc.toFixed(2)} m/s²`;
-
-                const velElem = document.getElementById('val-vel');
-                if (velElem) velElem.textContent = `${speed.toFixed(2)} m/s`;
-            }
-        });
-    }
- 
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function animate() {
-        renderer.setAnimationLoop(render);
-    }
-
-    function render(timestamp, frame) {
-        // Handle WebXR frame logic
-        if (frame) {
-            const session = renderer.xr.getSession();
-            const referenceSpace = renderer.xr.getReferenceSpace();
-            if (!referenceSpace) return;
-
-            // 1. Request Hit Test Source
-            if (hitTestSourceRequested === false) {
-                session.requestReferenceSpace('viewer').then((refSpace) => {
-                    session.requestHitTestSource({ space: refSpace }).then((source) => {
-                        hitTestSource = source;
-                    });
-                });
-                session.addEventListener('end', () => {
-                    hitTestSourceRequested = false;
-                    hitTestSource = null;
-                });
-                hitTestSourceRequested = true;
-            }
-
-            // 2. Perform Hit Test (only if model is NOT placed)
-            if (hitTestSource && !modelPlaced) {
-                const hitTestResults = frame.getHitTestResults(hitTestSource);
-                if (hitTestResults.length > 0) {
-                    const hit = hitTestResults[0];
-                    reticle.visible = true;
-                    
-                    const hitPose = hit.getPose(referenceSpace);
-                    const position = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(hitPose.transform.matrix));
-
-                    // Extract camera's yaw from its quaternion/rotation
-                    const cameraEuler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-                    const cameraYaw = cameraEuler.y;
-
-                    // Position reticle upright and facing the camera's yaw direction
-                    reticle.matrix.makeRotationY(cameraYaw);
-                    reticle.matrix.setPosition(position);
-                    
-                    // 3. User tapped -> Create Persistent XRAnchor
-                    if (userTapped) {
-                        userTapped = false;
-                        
-                        // Set model position and rotation immediately (perfectly upright, facing camera)
-                        modelGroup.position.copy(position);
-                        modelGroup.rotation.set(0, cameraYaw, 0);
-                        modelGroup.updateMatrix();
-
-                        modelInitialYaw = cameraYaw;
-                        modelPlaced = true;
-                        reticle.visible = false;
-                        modelGroup.visible = true;
-                        document.getElementById('btn-reset').style.display = 'block';
-
-                        // Request persistent anchor creation using standard hit.createAnchor or fallback frame.createAnchor
-                        let anchorPromise = null;
-                        if (typeof hit.createAnchor === 'function') {
-                            console.log("Creating anchor using hit.createAnchor()...");
-                            anchorPromise = hit.createAnchor();
-                        } else if (typeof frame.createAnchor === 'function') {
-                            console.log("Creating anchor using frame.createAnchor()...");
-                            anchorPromise = frame.createAnchor(hitPose.transform, referenceSpace);
-                        }
-
-                        if (anchorPromise) {
-                            anchorPromise.then((anchor) => {
-                                console.log("Anchor created successfully:", anchor);
-                                xrAnchor = anchor;
-                                hasAnchorInitialYaw = false;
-                            }).catch((err) => {
-                                console.error("Failed to create XRAnchor, keeping static fallback:", err);
-                            });
-                        } else {
-                            console.warn("Anchors API not supported. Relying on static local-floor placement.");
-                        }
-                    }
-                } else {
+                    modelPlaced = true;
                     reticle.visible = false;
-                }
-            } else if (modelPlaced) {
-                reticle.visible = false; // Ensure reticle stays hidden
-            }
+                    placeHint.style.display = 'none';
+                    gestureHint.style.display = 'block';
+                    $('btn-reset').style.display = 'block';
+                    updateStatus('ANCHORED', '#00e5ff');
 
-            // 4. Update Model Position from XRAnchor (Absolute Precision)
-            if (modelPlaced && xrAnchor) {
-                // Get the updated pose of our anchor directly from the frame space
-                const anchorPose = frame.getPose(xrAnchor.anchorSpace, referenceSpace);
-                if (anchorPose) {
-                    const matrix = new THREE.Matrix4().fromArray(anchorPose.transform.matrix);
-                    
-                    // Update position
-                    modelGroup.position.setFromMatrixPosition(matrix);
-                    
-                    const anchorEuler = new THREE.Euler().setFromRotationMatrix(matrix, 'YXZ');
-                    const currentYaw = anchorEuler.y;
-                    
-                    if (!hasAnchorInitialYaw) {
-                        anchorInitialYaw = currentYaw;
-                        hasAnchorInitialYaw = true;
+                    // Attempt persistent WebXR anchor
+                    let anchorP = null;
+                    if (typeof hit.createAnchor === 'function') {
+                        anchorP = hit.createAnchor();
+                    } else if (typeof frame.createAnchor === 'function') {
+                        anchorP = frame.createAnchor(hitPose.transform, refSpace);
                     }
-                    
-                    // Maintain perfectly upright orientation, only rotating by the tracking yaw difference
-                    const yawDiff = currentYaw - anchorInitialYaw;
-                    modelGroup.rotation.set(0, modelInitialYaw + yawDiff, 0);
-                    modelGroup.updateMatrix();
-                }
-            }
-
-            // Update sensor status panel in AR
-            const cameraEuler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-            const pitchDeg = (cameraEuler.x * (180 / Math.PI)).toFixed(1);
-            const rollDeg = (cameraEuler.z * (180 / Math.PI)).toFixed(1);
-            const yawDeg = (cameraEuler.y * (180 / Math.PI)).toFixed(1);
-            
-            document.getElementById('val-tilt').textContent = `${pitchDeg}° / ${rollDeg}°`;
-            document.getElementById('val-yaw').textContent = `${yawDeg}°`;
-            
-            if (modelPlaced) {
-                if (xrAnchor) {
-                    document.getElementById('val-anchor').textContent = 'PINS-LOCKED (SLAM)';
-                    document.getElementById('val-anchor').style.color = '#00ffcc';
-                } else {
-                    document.getElementById('val-anchor').textContent = 'STATIC (Fallback)';
-                    document.getElementById('val-anchor').style.color = '#ffcc00';
+                    if (anchorP) {
+                        anchorP.then(a => {
+                            xrAnchor = a;
+                            hasAnchorInitialYaw = false;
+                            updateStatus('PINS-LOCKED', '#00e5ff');
+                        }).catch(err => console.warn('Anchor failed, static ok:', err));
+                    }
                 }
             } else {
-                document.getElementById('val-anchor').textContent = reticle.visible ? 'PLANE DETECTED' : 'SCANNING...';
-                document.getElementById('val-anchor').style.color = reticle.visible ? '#00ffcc' : '#ff3333';
+                reticle.visible = false;
+            }
+        } else if (modelPlaced) {
+            reticle.visible = false;
+        }
+
+        // ── 4. Track anchor — update world position to cancel SLAM drift ───
+        if (modelPlaced && xrAnchor) {
+            const anchorPose = frame.getPose(xrAnchor.anchorSpace, refSpace);
+            if (anchorPose) {
+                const m = new THREE.Matrix4().fromArray(anchorPose.transform.matrix);
+                modelGroup.position.setFromMatrixPosition(m);
+                shadowPlane.position.copy(modelGroup.position);
+
+                const ae = new THREE.Euler().setFromRotationMatrix(m, 'YXZ');
+                if (!hasAnchorInitialYaw) {
+                    anchorInitialYaw = ae.y;
+                    hasAnchorInitialYaw = true;
+                }
+                // Preserve user rotation + only apply SLAM yaw correction
+                const yawCorrection = ae.y - anchorInitialYaw;
+                modelGroup.rotation.y = placedYaw + yawCorrection;
+                // Enforce perfectly vertical (no pitch/roll tilt from surface normal)
+                modelGroup.rotation.x = 0;
+                modelGroup.rotation.z = 0;
             }
         }
 
-        // Preview rotation (only when NOT in AR)
-        if (!renderer.xr.isPresenting) {
-            modelGroup.rotation.y += 0.005;
-            if (controls.enabled) controls.update();
-        }
+        // ── 5. Sync camera matrices for correct screen-space calculations ──
+        const xrCam = renderer.xr.getCamera();
+        const activeCam = (xrCam.cameras && xrCam.cameras.length > 0) ? xrCam.cameras[0] : xrCam;
+        camera.position.copy(activeCam.position);
+        camera.quaternion.copy(activeCam.quaternion);
+        camera.projectionMatrix.copy(activeCam.projectionMatrix);
+        camera.matrixWorld.copy(activeCam.matrixWorld);
+        camera.matrixWorldInverse.copy(activeCam.matrixWorldInverse);
 
-        // Synchronize Three.js camera pose with active WebXR camera for label projection (avoids CSS2D drift when tilting)
-        if (renderer.xr.enabled && renderer.xr.isPresenting) {
-            const xrCamera = renderer.xr.getCamera();
-            if (xrCamera.cameras && xrCamera.cameras.length > 0) {
-                const activeCamera = xrCamera.cameras[0];
-                camera.position.copy(activeCamera.position);
-                camera.quaternion.copy(activeCamera.quaternion);
-                camera.projectionMatrix.copy(activeCamera.projectionMatrix);
-                camera.matrixWorld.copy(activeCamera.matrixWorld);
-                camera.matrixWorldInverse.copy(activeCamera.matrixWorldInverse);
+        // ── 6. Sensor telemetry overlay ────────────────────────────────────
+        const eu = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+        const toDeg = r => (r * 180 / Math.PI).toFixed(1);
+        const tiltEl   = $('val-tilt');
+        const yawEl    = $('val-yaw');
+        const anchorEl = $('val-anchor');
+        if (tiltEl) tiltEl.textContent  = `${toDeg(eu.x)}° / ${toDeg(eu.z)}°`;
+        if (yawEl)  yawEl.textContent   = `${toDeg(eu.y)}°`;
+        if (anchorEl) {
+            if (!modelPlaced) {
+                anchorEl.textContent = reticle.visible ? 'PLANE DETECTED' : 'Scanning…';
+                anchorEl.style.color = reticle.visible ? '#4dff91' : '#ff4444';
+            } else if (xrAnchor) {
+                anchorEl.textContent = 'PINS-LOCKED';
+                anchorEl.style.color = '#00e5ff';
             } else {
-                camera.position.copy(xrCamera.position);
-                camera.quaternion.copy(xrCamera.quaternion);
-                camera.projectionMatrix.copy(xrCamera.projectionMatrix);
-                camera.matrixWorld.copy(xrCamera.matrixWorld);
-                camera.matrixWorldInverse.copy(xrCamera.matrixWorldInverse);
+                anchorEl.textContent = 'STATIC';
+                anchorEl.style.color = '#ffcc00';
             }
         }
-
-        renderer.render(scene, camera);
-        labelRenderer.render(scene, camera);
     }
-</script>
 
+    // Preview mode — auto-rotate
+    if (!renderer.xr.isPresenting) {
+        modelGroup.rotation.y += 0.004;
+        if (controls.enabled) controls.update();
+    }
+
+    renderer.render(scene, camera);
+}
+</script>
 </body>
 </html>
